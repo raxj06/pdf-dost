@@ -15,7 +15,7 @@ const PORT = process.env.PORT || 5000;
  * Middleware Configuration
  */
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:3001',
+  origin: process.env.CLIENT_URL || 'https://pdf-dost.vercel.app',
   credentials: true
 }));
 

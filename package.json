@@ -1,0 +1,35 @@
+{
+  "name": "pdf-dost",
+  "version": "1.0.0",
+  "description": "PDF Header and Footer Editor - Your PDF Solution",
+  "main": "server/index.js",
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "nodemon server/index.js",
+    "client": "cd client && npm start",
+    "build": "cd client && npm run build",
+    "start": "node server/index.js",
+    "install-deps": "npm install && cd client && npm install"
+  },
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.21.2",
+    "multer": "^1.4.5-lts.1",
+    "pdf-lib": "^1.17.1"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "nodemon": "^3.0.1"
+  },
+  "keywords": [
+    "pdf",
+    "header",
+    "footer",
+    "editor",
+    "react",
+    "nodejs"
+  ],
+  "author": "PDF Dost",
+  "license": "MIT"
+}

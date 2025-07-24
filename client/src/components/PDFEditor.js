@@ -77,7 +77,7 @@ const PDFEditor = () => {
       formData.append('pdf', selectedFile);
       formData.append('headerFooterData', JSON.stringify(headerFooterData));
 
-      const response = await fetch('http://localhost:5000/api/pdf/process', {
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/pdf/process`, {
         method: 'POST',
         body: formData,
       });

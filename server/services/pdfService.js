@@ -1,4 +1,4 @@
-const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
+const { PDFDocument, rgb, StandardFonts, degrees } = require('pdf-lib');
 
 /**
  * PDF Processing Service
@@ -89,6 +89,109 @@ class PDFService {
   static getRightPosition(font, text, fontSize, pageWidth, margin = 50) {
     const textWidth = font.widthOfTextAtSize(text, fontSize);
     return pageWidth - textWidth - margin;
+  }
+
+  /**
+   * Add watermark to PDF
+   * @param {Buffer} pdfBuffer - PDF file buffer
+   * @param {Object} watermarkData - Watermark configuration
+   * @returns {Promise<Uint8Array>} Processed PDF bytes
+   */
+  static async addWatermarkToPDF(pdfBuffer, watermarkData) {
+    try {
+      // Load PDF document
+      const pdfDoc = await PDFDocument.load(pdfBuffer);
+      const pages = pdfDoc.getPages();
+      
+      // Extract watermark configuration
+      const {
+        text = 'CONFIDENTIAL',
+        fontSize = 48,
+        opacity = 0.3,
+        color = '#808080',
+        rotation = 45,
+        position = 'center', // center, top-left, top-right, bottom-left, bottom-right
+        startPage = 1,
+        endPage = 0 // 0 means all pages
+      } = watermarkData;
+
+      // Convert color and validate parameters
+      const watermarkColor = this.hexToRgb(color);
+      const watermarkOpacity = Math.max(0, Math.min(1, parseFloat(opacity)));
+      const watermarkSize = parseInt(fontSize) || 48;
+      const watermarkRotation = parseInt(rotation) || 45;
+      
+      // Embed font for watermark
+      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+      
+      // Calculate page range - handle endPage = 0 as "all pages"
+      const startPageIndex = Math.max(0, parseInt(startPage) - 1);
+      const actualEndPage = endPage === 0 ? pages.length : parseInt(endPage);
+      const endPageIndex = Math.min(pages.length - 1, actualEndPage - 1);
+
+      // Process each page in the specified range
+      for (let i = startPageIndex; i <= endPageIndex; i++) {
+        const page = pages[i];
+        const { width, height } = page.getSize();
+        
+        // Calculate watermark position
+        const { x, y } = this.calculateWatermarkPosition(
+          position, 
+          width, 
+          height, 
+          text, 
+          font, 
+          watermarkSize
+        );
+
+        // Add watermark text with rotation and opacity
+        page.drawText(text, {
+          x,
+          y,
+          size: watermarkSize,
+          font,
+          color: rgb(watermarkColor.r, watermarkColor.g, watermarkColor.b),
+          opacity: watermarkOpacity,
+          rotate: degrees(watermarkRotation) // Use degrees() function from pdf-lib
+        });
+      }
+
+      return await pdfDoc.save();
+    } catch (error) {
+      throw new Error(`Watermark processing failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Calculate watermark position based on position setting
+   * @param {string} position - Position setting (center, top-left, etc.)
+   * @param {number} pageWidth - Page width
+   * @param {number} pageHeight - Page height
+   * @param {string} text - Watermark text
+   * @param {Object} font - PDF font object
+   * @param {number} fontSize - Font size
+   * @returns {Object} X and Y coordinates
+   */
+  static calculateWatermarkPosition(position, pageWidth, pageHeight, text, font, fontSize) {
+    const textWidth = font.widthOfTextAtSize(text, fontSize);
+    const textHeight = fontSize;
+    
+    switch (position) {
+      case 'top-left':
+        return { x: 50, y: pageHeight - 100 };
+      case 'top-right':
+        return { x: pageWidth - textWidth - 50, y: pageHeight - 100 };
+      case 'bottom-left':
+        return { x: 50, y: 100 };
+      case 'bottom-right':
+        return { x: pageWidth - textWidth - 50, y: 100 };
+      case 'center':
+      default:
+        return { 
+          x: (pageWidth - textWidth) / 2, 
+          y: (pageHeight - textHeight) / 2 
+        };
+    }
   }
 
   /**

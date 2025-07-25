@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#64ffda;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#667eea;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="32" height="32" rx="6" fill="url(#bg)"/>
+  
+  <!-- PDF Document -->
+  <rect x="6" y="6" width="16" height="20" rx="2" fill="#1e1e32" stroke="#64ffda" stroke-width="1"/>
+  
+  <!-- Text Lines -->
+  <rect x="8" y="9" width="8" height="1" fill="#64ffda" opacity="0.8"/>
+  <rect x="8" y="11" width="10" height="1" fill="#64ffda" opacity="0.6"/>
+  <rect x="8" y="13" width="6" height="1" fill="#64ffda" opacity="0.6"/>
+  
+  <!-- Watermark Symbol -->
+  <circle cx="24" cy="24" r="4" fill="#667eea" opacity="0.8"/>
+  <text x="24" y="27" font-family="Arial, sans-serif" font-size="6" fill="white" text-anchor="middle">W</text>
+</svg>

@@ -10,6 +10,18 @@ const router = express.Router();
  */
 
 /**
+ * @route   POST /api/pdf/watermark
+ * @desc    Add watermark to PDF
+ * @access  Public
+ * @body    multipart/form-data with PDF file and watermarkData JSON
+ */
+router.post('/watermark', 
+  upload.single('pdf'), 
+  handleUploadError,
+  PDFController.addWatermark
+);
+
+/**
  * @route   POST /api/pdf/process
  * @desc    Process PDF with headers and footers
  * @access  Public
@@ -20,6 +32,13 @@ router.post('/process',
   handleUploadError,
   PDFController.processPDF
 );
+
+/**
+ * @route   GET /api/pdf/watermark/options
+ * @desc    Get watermark configuration options
+ * @access  Public
+ */
+router.get('/watermark/options', PDFController.getWatermarkOptions);
 
 /**
  * @route   GET /api/pdf/templates

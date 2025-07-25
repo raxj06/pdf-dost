@@ -1,31 +1,12 @@
 import React, { useState, useRef } from 'react';
+import WatermarkEditor from './WatermarkEditor';
 import './PDFEditor.css';
 
 const PDFEditor = () => {
+  const [activeTab, setActiveTab] = useState('header-footer');
   const [selectedFile, setSelectedFile] = useState(null);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [headerFooterData, setHeaderFooterData] = useState({
-    leftHeader: '',
-    middleHeader: '',
-    rightHeader: '',
-    leftFooter: '',
-    middleFooter: '',
-    rightFooter: '',
-    startPage: 1,
-    coverWithWhite: false,
-    textColor: '#000000',
-    fontSize: 10
-  });
-  const [selectedTemplate, setSelectedTemplate] = useState('');
   const fileInputRef = useRef(null);
-
-  const templates = [
-    { value: 'page-x-of-y', label: 'Page (x) of (y)' },
-    { value: 'x-of-y', label: '(x) of (y)' },
-    { value: 'page-x', label: 'Page (x)' },
-    { value: 'x', label: '(x)' },
-    { value: 'file', label: '(file)' }
-  ];
 
   const handleFileUpload = (event) => {
     const file = event.target.files[0];
@@ -49,6 +30,27 @@ const PDFEditor = () => {
   const handleDragOver = (event) => {
     event.preventDefault();
   };
+  const [headerFooterData, setHeaderFooterData] = useState({
+    leftHeader: '',
+    middleHeader: '',
+    rightHeader: '',
+    leftFooter: '',
+    middleFooter: '',
+    rightFooter: '',
+    startPage: 1,
+    coverWithWhite: false,
+    textColor: '#000000',
+    fontSize: 10
+  });
+  const [selectedTemplate, setSelectedTemplate] = useState('');
+
+  const templates = [
+    { value: 'page-x-of-y', label: 'Page (x) of (y)' },
+    { value: 'x-of-y', label: '(x) of (y)' },
+    { value: 'page-x', label: 'Page (x)' },
+    { value: 'x', label: '(x)' },
+    { value: 'file', label: '(file)' }
+  ];
 
   const handleTemplateSelect = (templateValue, position) => {
     const templateText = templates.find(t => t.value === templateValue)?.label || '';
@@ -117,10 +119,16 @@ const PDFEditor = () => {
           </div>
         </div>
         <div className="header-center">
-          <button className="nav-btn active">
+          <button 
+            className={`nav-btn ${activeTab === 'header-footer' ? 'active' : ''}`}
+            onClick={() => setActiveTab('header-footer')}
+          >
             📄 Header & Footer
           </button>
-          <button className="nav-btn">
+          <button 
+            className={`nav-btn ${activeTab === 'watermark' ? 'active' : ''}`}
+            onClick={() => setActiveTab('watermark')}
+          >
             🖼️ Watermark
           </button>
           <button className="nav-btn">
@@ -128,35 +136,149 @@ const PDFEditor = () => {
           </button>
         </div>
         <div className="header-right">
-          <span className="version">v2.0</span>
+          <span className="version">v2.1</span>
         </div>
       </header>
 
       {/* Main Content */}
       <div className="main-content">
-        <div className="editor-container">
-          <div className="page-icon">📄</div>
-          <h1 className="page-title">Header & Footer Editor</h1>
-          
-          {/* File Upload */}
-          <div 
-            className="file-upload-area"
-            onClick={() => fileInputRef.current?.click()}
-            onDrop={handleDrop}
-            onDragOver={handleDragOver}
-          >
-            <div className="upload-icon">📁</div>
-            <div className="upload-text">
-              {selectedFile ? selectedFile.name : 'Choose PDF File'}
+        {activeTab === 'header-footer' ? (
+          <HeaderFooterEditor 
+            selectedFile={selectedFile}
+            setSelectedFile={setSelectedFile}
+            isProcessing={isProcessing}
+            setIsProcessing={setIsProcessing}
+            fileInputRef={fileInputRef}
+            handleFileUpload={handleFileUpload}
+            handleDrop={handleDrop}
+            handleDragOver={handleDragOver}
+          />
+        ) : activeTab === 'watermark' ? (
+          <WatermarkEditor />
+        ) : (
+          <div className="editor-container">
+            <div className="page-icon">✂️</div>
+            <h1 className="page-title">Split PDF</h1>
+            <div className="coming-soon">
+              <p>PDF splitting feature coming soon!</p>
             </div>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".pdf"
-              onChange={handleFileUpload}
-              style={{ display: 'none' }}
-            />
           </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const HeaderFooterEditor = ({ 
+  selectedFile, 
+  setSelectedFile, 
+  isProcessing, 
+  setIsProcessing,
+  fileInputRef,
+  handleFileUpload,
+  handleDrop,
+  handleDragOver
+}) => {
+  const [headerFooterData, setHeaderFooterData] = useState({
+    leftHeader: '',
+    middleHeader: '',
+    rightHeader: '',
+    leftFooter: '',
+    middleFooter: '',
+    rightFooter: '',
+    startPage: 1,
+    coverWithWhite: false,
+    textColor: '#000000',
+    fontSize: 10
+  });
+
+  const templates = [
+    { value: 'page-x-of-y', label: 'Page (x) of (y)' },
+    { value: 'x-of-y', label: '(x) of (y)' },
+    { value: 'page-x', label: 'Page (x)' },
+    { value: 'x', label: '(x)' },
+    { value: 'file', label: '(file)' }
+  ];
+
+  const handleTemplateSelect = (templateValue, position) => {
+    const templateText = templates.find(t => t.value === templateValue)?.label || '';
+    setHeaderFooterData(prev => ({
+      ...prev,
+      [position]: templateText
+    }));
+  };
+
+  const handleInputChange = (field, value) => {
+    setHeaderFooterData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleProcessPDF = async () => {
+    if (!selectedFile) {
+      alert('Please select a PDF file first');
+      return;
+    }
+
+    setIsProcessing(true);
+    try {
+      const formData = new FormData();
+      formData.append('pdf', selectedFile);
+      formData.append('headerFooterData', JSON.stringify(headerFooterData));
+
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/api/pdf/process`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (response.ok) {
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.style.display = 'none';
+        a.href = url;
+        a.download = 'processed-document.pdf';
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      } else {
+        const error = await response.json();
+        alert(`Error: ${error.error}`);
+      }
+    } catch (error) {
+      console.error('Error processing PDF:', error);
+      alert('Failed to process PDF. Please try again.');
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  return (
+    <div className="editor-container">
+      <div className="page-icon">📄</div>
+      <h1 className="page-title">Header & Footer Editor</h1>
+      
+      {/* File Upload */}
+      <div 
+        className="file-upload-area"
+        onClick={() => fileInputRef.current?.click()}
+        onDrop={handleDrop}
+        onDragOver={handleDragOver}
+      >
+        <div className="upload-icon">📁</div>
+        <div className="upload-text">
+          {selectedFile ? selectedFile.name : 'Choose PDF File'}
+        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".pdf"
+          onChange={handleFileUpload}
+          style={{ display: 'none' }}
+        />
+      </div>
 
           {/* Header Section */}
           <div className="section">
@@ -378,9 +500,7 @@ const PDFEditor = () => {
             {isProcessing ? 'Processing...' : 'Add Header & Footer'}
           </button>
         </div>
-      </div>
-    </div>
-  );
-};
+      );
+    };
 
 export default PDFEditor;

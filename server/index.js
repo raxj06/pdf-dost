@@ -15,7 +15,11 @@ const PORT = process.env.PORT || 5000;
  * Middleware Configuration
  */
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'https://pdf-dost.vercel.app',
+  origin: [
+    process.env.CLIENT_URL || 'https://pdf-dost.vercel.app',
+    'http://localhost:3000',
+    'http://localhost:3001'
+  ],
   credentials: true
 }));
 
@@ -39,9 +43,21 @@ app.use('/api', apiRoutes);
 // Root route
 app.get('/', (req, res) => {
   res.json({ 
-    message: 'PDF Dost - Header & Footer Editor API',
-    version: '2.0.0',
+    message: 'PDF Dost - Header & Footer Editor + Watermark API',
+    version: '2.1.0',
     status: 'Active',
+    features: [
+      'Header & Footer Addition',
+      'PDF Watermarking',
+      'Template Processing'
+    ],
+    endpoints: {
+      'process': '/api/pdf/process',
+      'watermark': '/api/pdf/watermark',
+      'templates': '/api/pdf/templates',
+      'watermark-options': '/api/pdf/watermark/options',
+      'health': '/api/pdf/health'
+    },
     documentation: '/api',
     timestamp: new Date().toISOString()
   });

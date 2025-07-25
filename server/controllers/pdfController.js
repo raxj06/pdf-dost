@@ -7,6 +7,63 @@ const PDFService = require('../services/pdfService');
 class PDFController {
   
   /**
+   * Process PDF with watermark
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  static async addWatermark(req, res) {
+    try {
+      // Validate file upload
+      if (!req.file) {
+        return res.status(400).json({ 
+          error: 'No PDF file uploaded',
+          details: 'Please select a PDF file to add watermark'
+        });
+      }
+
+      // Validate and parse watermark data
+      let watermarkData;
+      try {
+        watermarkData = JSON.parse(req.body.watermarkData || '{}');
+        console.log('Watermark data received:', watermarkData);
+      } catch (parseError) {
+        console.error('Parse error:', parseError);
+        return res.status(400).json({ 
+          error: 'Invalid watermark data',
+          details: 'Watermark data must be valid JSON'
+        });
+      }
+
+      // Process the PDF with watermark
+      const processedPdfBytes = await PDFService.addWatermarkToPDF(
+        req.file.buffer, 
+        watermarkData
+      );
+      
+      // Generate filename with timestamp
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const filename = `watermarked-document-${timestamp}.pdf`;
+
+      // Set response headers for file download
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Content-Length', processedPdfBytes.length);
+      
+      // Send processed PDF
+      res.send(Buffer.from(processedPdfBytes));
+
+    } catch (error) {
+      console.error('Error adding watermark to PDF:', error);
+      
+      // Send appropriate error response
+      res.status(500).json({ 
+        error: 'Failed to add watermark to PDF', 
+        details: error.message 
+      });
+    }
+  }
+
+  /**
    * Process PDF with headers and footers
    * @param {Object} req - Express request object
    * @param {Object} res - Express response object
@@ -62,7 +119,7 @@ class PDFController {
   }
 
   /**
-   * Get available PDF templates
+   * Get available PDF templates and watermark options
    * @param {Object} req - Express request object
    * @param {Object} res - Express response object
    */
@@ -96,15 +153,87 @@ class PDFController {
         }
       ];
 
+      const watermarkPositions = [
+        { 
+          value: 'center', 
+          label: 'Center',
+          description: 'Watermark appears in the center of the page'
+        },
+        { 
+          value: 'top-left', 
+          label: 'Top Left',
+          description: 'Watermark appears in the top-left corner'
+        },
+        { 
+          value: 'top-right', 
+          label: 'Top Right',
+          description: 'Watermark appears in the top-right corner'
+        },
+        { 
+          value: 'bottom-left', 
+          label: 'Bottom Left',
+          description: 'Watermark appears in the bottom-left corner'
+        },
+        { 
+          value: 'bottom-right', 
+          label: 'Bottom Right',
+          description: 'Watermark appears in the bottom-right corner'
+        }
+      ];
+
       res.json({
         success: true,
-        templates
+        templates,
+        watermarkPositions
       });
 
     } catch (error) {
       console.error('Error fetching templates:', error);
       res.status(500).json({ 
         error: 'Failed to fetch templates', 
+        details: error.message 
+      });
+    }
+  }
+
+  /**
+   * Get watermark configuration options
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  static async getWatermarkOptions(req, res) {
+    try {
+      const options = {
+        positions: [
+          { value: 'center', label: 'Center', description: 'Watermark appears in the center of the page' },
+          { value: 'top-left', label: 'Top Left', description: 'Watermark appears in the top-left corner' },
+          { value: 'top-right', label: 'Top Right', description: 'Watermark appears in the top-right corner' },
+          { value: 'bottom-left', label: 'Bottom Left', description: 'Watermark appears in the bottom-left corner' },
+          { value: 'bottom-right', label: 'Bottom Right', description: 'Watermark appears in the bottom-right corner' }
+        ],
+        defaultSettings: {
+          text: 'CONFIDENTIAL',
+          fontSize: 48,
+          opacity: 0.3,
+          color: '#808080',
+          rotation: 45,
+          position: 'center',
+          startPage: 1
+        },
+        fontSizeRange: { min: 12, max: 100 },
+        opacityRange: { min: 0.1, max: 1.0 },
+        rotationRange: { min: -90, max: 90 }
+      };
+
+      res.json({
+        success: true,
+        options
+      });
+
+    } catch (error) {
+      console.error('Error fetching watermark options:', error);
+      res.status(500).json({ 
+        error: 'Failed to fetch watermark options', 
         details: error.message 
       });
     }

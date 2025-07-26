@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import WatermarkEditor from './WatermarkEditor';
+import SplitEditor from './SplitEditor';
 import './PDFEditor.css';
 
 const PDFEditor = () => {
@@ -131,7 +132,10 @@ const PDFEditor = () => {
           >
             🖼️ Watermark
           </button>
-          <button className="nav-btn">
+          <button 
+            className={`nav-btn ${activeTab === 'split' ? 'active' : ''}`}
+            onClick={() => setActiveTab('split')}
+          >
             ✂️ Split PDF
           </button>
         </div>
@@ -155,6 +159,8 @@ const PDFEditor = () => {
           />
         ) : activeTab === 'watermark' ? (
           <WatermarkEditor />
+        ) : activeTab === 'split' ? (
+          <SplitEditor />
         ) : (
           <div className="editor-container">
             <div className="page-icon">✂️</div>

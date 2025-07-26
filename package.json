@@ -12,6 +12,7 @@
     "install-deps": "npm install && cd client && npm install"
   },
   "dependencies": {
+    "archiver": "^6.0.2",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.21.2",

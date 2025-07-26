@@ -7,6 +7,82 @@ const PDFService = require('../services/pdfService');
 class PDFController {
   
   /**
+   * Split PDF into multiple documents
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  static async splitPDF(req, res) {
+    try {
+      // Validate file upload
+      if (!req.file) {
+        return res.status(400).json({ 
+          error: 'No PDF file uploaded',
+          details: 'Please select a PDF file to split'
+        });
+      }
+
+      // Validate and parse split data
+      let splitData;
+      try {
+        splitData = JSON.parse(req.body.splitData || '{}');
+        console.log('Split data received:', splitData);
+      } catch (parseError) {
+        console.error('Parse error:', parseError);
+        return res.status(400).json({ 
+          error: 'Invalid split data',
+          details: 'Split data must be valid JSON'
+        });
+      }
+
+      // Process the PDF split
+      const splitResults = await PDFService.splitPDF(
+        req.file.buffer, 
+        splitData
+      );
+      
+      if (splitResults.length === 1) {
+        // Single file result - send directly
+        const result = splitResults[0];
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
+        res.setHeader('Content-Length', result.buffer.length);
+        res.send(result.buffer);
+      } else {
+        // Multiple files - create ZIP archive
+        const archiver = require('archiver');
+        const archive = archiver('zip', {
+          zlib: { level: 9 }
+        });
+
+        // Generate filename with timestamp
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const zipFilename = `split-documents-${timestamp}.zip`;
+
+        res.setHeader('Content-Type', 'application/zip');
+        res.setHeader('Content-Disposition', `attachment; filename="${zipFilename}"`);
+        
+        archive.pipe(res);
+
+        // Add each PDF to the archive
+        splitResults.forEach(result => {
+          archive.append(result.buffer, { name: result.filename });
+        });
+
+        await archive.finalize();
+      }
+
+    } catch (error) {
+      console.error('Error splitting PDF:', error);
+      
+      // Send appropriate error response
+      res.status(500).json({ 
+        error: 'Failed to split PDF', 
+        details: error.message 
+      });
+    }
+  }
+
+  /**
    * Process PDF with watermark
    * @param {Object} req - Express request object
    * @param {Object} res - Express response object

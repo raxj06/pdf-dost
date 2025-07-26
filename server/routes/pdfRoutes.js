@@ -10,6 +10,18 @@ const router = express.Router();
  */
 
 /**
+ * @route   POST /api/pdf/split
+ * @desc    Split PDF into multiple documents
+ * @access  Public
+ * @body    multipart/form-data with PDF file and splitData JSON
+ */
+router.post('/split', 
+  upload.single('pdf'), 
+  handleUploadError,
+  PDFController.splitPDF
+);
+
+/**
  * @route   POST /api/pdf/watermark
  * @desc    Add watermark to PDF
  * @access  Public

@@ -195,6 +195,117 @@ class PDFService {
   }
 
   /**
+   * Split PDF into separate documents
+   * @param {Buffer} pdfBuffer - PDF file buffer
+   * @param {Object} splitData - Split configuration
+   * @returns {Promise<Array>} Array of PDF buffers with metadata
+   */
+  static async splitPDF(pdfBuffer, splitData) {
+    try {
+      // Load PDF document
+      const sourcePdf = await PDFDocument.load(pdfBuffer);
+      const totalPages = sourcePdf.getPageCount();
+      
+      // Extract split configuration
+      const {
+        splitType = 'pages', // 'pages', 'ranges', 'every'
+        pages = [], // Array of page numbers for 'pages' type
+        ranges = [], // Array of {start, end} objects for 'ranges' type
+        everyNPages = 1, // Number for 'every' type
+        fileName = 'document' // Base filename
+      } = splitData;
+
+      const results = [];
+
+      if (splitType === 'pages') {
+        // Split by individual pages
+        for (let i = 0; i < pages.length; i++) {
+          const pageNum = parseInt(pages[i]);
+          if (pageNum > 0 && pageNum <= totalPages) {
+            const newPdf = await PDFDocument.create();
+            const [copiedPage] = await newPdf.copyPages(sourcePdf, [pageNum - 1]);
+            newPdf.addPage(copiedPage);
+            
+            const pdfBytes = await newPdf.save();
+            results.push({
+              buffer: Buffer.from(pdfBytes),
+              filename: `${fileName}_page_${pageNum}.pdf`,
+              pageRange: `Page ${pageNum}`,
+              pageCount: 1
+            });
+          }
+        }
+      } else if (splitType === 'ranges') {
+        // Split by page ranges
+        for (let i = 0; i < ranges.length; i++) {
+          const { start, end } = ranges[i];
+          const startPage = Math.max(1, parseInt(start));
+          const endPage = Math.min(totalPages, parseInt(end));
+          
+          if (startPage <= endPage) {
+            const newPdf = await PDFDocument.create();
+            const pageIndices = [];
+            for (let pageNum = startPage; pageNum <= endPage; pageNum++) {
+              pageIndices.push(pageNum - 1);
+            }
+            
+            const copiedPages = await newPdf.copyPages(sourcePdf, pageIndices);
+            copiedPages.forEach(page => newPdf.addPage(page));
+            
+            const pdfBytes = await newPdf.save();
+            results.push({
+              buffer: Buffer.from(pdfBytes),
+              filename: `${fileName}_pages_${startPage}_to_${endPage}.pdf`,
+              pageRange: `Pages ${startPage}-${endPage}`,
+              pageCount: endPage - startPage + 1
+            });
+          }
+        }
+      } else if (splitType === 'every') {
+        // Split every N pages
+        const n = Math.max(1, parseInt(everyNPages));
+        let partNumber = 1;
+        
+        for (let i = 0; i < totalPages; i += n) {
+          const newPdf = await PDFDocument.create();
+          const pageIndices = [];
+          const endIndex = Math.min(i + n, totalPages);
+          
+          for (let j = i; j < endIndex; j++) {
+            pageIndices.push(j);
+          }
+          
+          const copiedPages = await newPdf.copyPages(sourcePdf, pageIndices);
+          copiedPages.forEach(page => newPdf.addPage(page));
+          
+          const pdfBytes = await newPdf.save();
+          const startPage = i + 1;
+          const endPage = endIndex;
+          
+          results.push({
+            buffer: Buffer.from(pdfBytes),
+            filename: `${fileName}_part_${partNumber}.pdf`,
+            pageRange: `Pages ${startPage}-${endPage}`,
+            pageCount: endPage - startPage + 1
+          });
+          
+          partNumber++;
+        }
+      } else {
+        throw new Error(`Invalid split type: ${splitType}`);
+      }
+
+      if (results.length === 0) {
+        throw new Error('No valid pages or ranges specified for splitting');
+      }
+
+      return results;
+    } catch (error) {
+      throw new Error(`PDF splitting failed: ${error.message}`);
+    }
+  }
+
+  /**
    * Add headers and footers to PDF
    * @param {Buffer} pdfBuffer - PDF file buffer
    * @param {Object} headerFooterData - Header and footer configuration

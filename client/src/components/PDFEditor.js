@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import WatermarkEditor from './WatermarkEditor';
 import SplitEditor from './SplitEditor';
+import MergeEditor from './MergeEditor';
 import './PDFEditor.css';
 
 const PDFEditor = () => {
@@ -138,6 +139,12 @@ const PDFEditor = () => {
           >
             ✂️ Split PDF
           </button>
+          <button 
+            className={`nav-btn ${activeTab === 'merge' ? 'active' : ''}`}
+            onClick={() => setActiveTab('merge')}
+          >
+            🔗 Merge PDFs
+          </button>
         </div>
         <div className="header-right">
           <span className="version">v2.1</span>
@@ -161,6 +168,8 @@ const PDFEditor = () => {
           <WatermarkEditor />
         ) : activeTab === 'split' ? (
           <SplitEditor />
+        ) : activeTab === 'merge' ? (
+          <MergeEditor />
         ) : (
           <div className="editor-container">
             <div className="page-icon">✂️</div>

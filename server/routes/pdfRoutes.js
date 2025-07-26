@@ -22,6 +22,30 @@ router.post('/split',
 );
 
 /**
+ * @route   POST /api/pdf/merge
+ * @desc    Merge multiple PDF files into a single document
+ * @access  Public
+ * @body    multipart/form-data with multiple PDF files and mergeData JSON
+ */
+router.post('/merge', 
+  upload.array('pdfs', 10), // Allow up to 10 files
+  handleUploadError,
+  PDFController.mergePDFs
+);
+
+/**
+ * @route   POST /api/pdf/merge/preview
+ * @desc    Get preview information for PDF merge
+ * @access  Public
+ * @body    multipart/form-data with multiple PDF files
+ */
+router.post('/merge/preview', 
+  upload.array('pdfs', 10),
+  handleUploadError,
+  PDFController.getMergePreview
+);
+
+/**
  * @route   POST /api/pdf/watermark
  * @desc    Add watermark to PDF
  * @access  Public

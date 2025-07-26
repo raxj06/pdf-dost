@@ -316,6 +316,172 @@ class PDFController {
   }
 
   /**
+   * Merge multiple PDF files into a single document
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  static async mergePDFs(req, res) {
+    try {
+      // Validate file uploads
+      if (!req.files || req.files.length === 0) {
+        return res.status(400).json({ 
+          error: 'No PDF files uploaded',
+          details: 'Please select at least 2 PDF files to merge'
+        });
+      }
+
+      if (req.files.length < 2) {
+        return res.status(400).json({ 
+          error: 'Insufficient files',
+          details: 'At least 2 PDF files are required for merging'
+        });
+      }
+
+      console.log(`📁 Merge request received: ${req.files.length} files`);
+
+      // Validate and parse merge data
+      let mergeData = {};
+      try {
+        if (req.body.mergeData) {
+          mergeData = JSON.parse(req.body.mergeData);
+        }
+        console.log('Merge data received:', mergeData);
+      } catch (parseError) {
+        console.warn('Invalid merge data, using defaults:', parseError.message);
+        mergeData = {};
+      }
+
+      // Extract file buffers and names
+      const pdfBuffers = req.files.map(file => file.buffer);
+      const fileNames = req.files.map(file => file.originalname);
+      
+      // Add file names to merge data for potential bookmark creation
+      mergeData.fileNames = fileNames;
+
+      console.log('Files to merge:', fileNames);
+
+      // Get merge info first
+      const mergeInfo = await PDFService.getPDFMergeInfo(pdfBuffers);
+      console.log('Merge info:', mergeInfo);
+
+      // Process the PDF merge
+      const mergedPdfBuffer = await PDFService.mergePDFs(pdfBuffers, mergeData);
+      
+      // Additional validation: Ensure buffer is a valid type
+      if (!Buffer.isBuffer(mergedPdfBuffer) && !(mergedPdfBuffer instanceof Uint8Array)) {
+        throw new Error('Invalid PDF buffer type returned from merge service');
+      }
+      
+      // Convert to Buffer if it's Uint8Array for consistent handling
+      const finalBuffer = Buffer.isBuffer(mergedPdfBuffer) ? 
+        mergedPdfBuffer : 
+        Buffer.from(mergedPdfBuffer);
+      
+      // Verify buffer integrity
+      if (finalBuffer.length === 0) {
+        throw new Error('Merged PDF buffer is empty');
+      }
+      
+      // Check PDF header in the buffer
+      const headerCheck = finalBuffer.toString('ascii', 0, 8);
+      if (!headerCheck.startsWith('%PDF-')) {
+        throw new Error('Merged PDF buffer does not contain valid PDF header');
+      }
+      
+      console.log(`✅ Buffer validation passed: ${finalBuffer.length} bytes`);
+      
+      // Debug: Save a copy to server temp folder for verification (in development)
+      if (process.env.NODE_ENV !== 'production') {
+        const fs = require('fs');
+        const path = require('path');
+        const tempFilePath = path.join(__dirname, '../temp', `debug-${Date.now()}.pdf`);
+        try {
+          fs.writeFileSync(tempFilePath, finalBuffer);
+          console.log(`🔍 Debug PDF saved to: ${tempFilePath}`);
+        } catch (debugError) {
+          console.warn(`⚠️  Could not save debug PDF: ${debugError.message}`);
+        }
+      }
+      
+      // Generate filename
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const outputFileName = mergeData.outputFileName || `merged-document-${timestamp}.pdf`;
+      
+      console.log(`✅ Merge completed: ${mergeInfo.totalPages} pages, ${finalBuffer.length} bytes`);
+
+      // Send the merged PDF with proper headers to prevent compression issues
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${outputFileName}"`);
+      res.setHeader('Content-Length', finalBuffer.length);
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      res.setHeader('Content-Encoding', 'identity'); // Prevent automatic compression
+      res.setHeader('Accept-Ranges', 'bytes'); // Allow partial downloads
+      
+      console.log(`📤 Sending PDF: ${finalBuffer.length} bytes (${(finalBuffer.length / (1024 * 1024)).toFixed(2)} MB)`);
+      
+      res.send(finalBuffer);
+
+    } catch (error) {
+      console.error('PDF merge error:', error);
+      res.status(500).json({ 
+        error: 'PDF merge failed', 
+        details: error.message 
+      });
+    }
+  }
+
+  /**
+   * Get merge preview information
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  static async getMergePreview(req, res) {
+    try {
+      // Validate file uploads
+      if (!req.files || req.files.length === 0) {
+        return res.status(400).json({ 
+          error: 'No PDF files uploaded',
+          details: 'Please select PDF files for preview'
+        });
+      }
+
+      console.log(`📋 Preview request for ${req.files.length} files`);
+
+      // Extract file buffers
+      const pdfBuffers = req.files.map(file => file.buffer);
+      
+      // Get merge info
+      const mergeInfo = await PDFService.getPDFMergeInfo(pdfBuffers);
+      
+      // Add file names to response
+      const fileDetails = req.files.map((file, index) => ({
+        name: file.originalname,
+        size: file.size,
+        pageCount: mergeInfo.files[index].pageCount
+      }));
+
+      const previewData = {
+        ...mergeInfo,
+        files: fileDetails,
+        estimatedOutputSize: Math.round(mergeInfo.estimatedSize * 1.1) // Rough estimate with overhead
+      };
+
+      console.log('Preview data:', previewData);
+
+      res.json(previewData);
+
+    } catch (error) {
+      console.error('Error generating merge preview:', error);
+      res.status(500).json({ 
+        error: 'Failed to generate preview', 
+        details: error.message 
+      });
+    }
+  }
+
+  /**
    * Health check for PDF service
    * @param {Object} req - Express request object
    * @param {Object} res - Express response object

@@ -426,6 +426,279 @@ class PDFService {
       throw new Error(`PDF processing failed: ${error.message}`);
     }
   }
+
+  /**
+   * Merge multiple PDF documents into a single PDF
+   * @param {Array<Buffer>} pdfBuffers - Array of PDF file buffers to merge
+   * @param {Object} mergeData - Merge configuration options
+   * @returns {Promise<Buffer>} Merged PDF as buffer
+   */
+  static async mergePDFs(pdfBuffers, mergeData = {}) {
+    try {
+      if (!pdfBuffers || pdfBuffers.length === 0) {
+        throw new Error('No PDF files provided for merging');
+      }
+
+      if (pdfBuffers.length === 1) {
+        throw new Error('At least 2 PDF files are required for merging');
+      }
+
+      // Check total size before processing
+      const totalSize = pdfBuffers.reduce((sum, buffer) => sum + buffer.length, 0);
+      const totalSizeMB = totalSize / (1024 * 1024);
+      
+      console.log(`📊 Total file size: ${totalSizeMB.toFixed(2)} MB`);
+      
+      if (totalSizeMB > 500) {
+        throw new Error(`Total file size (${totalSizeMB.toFixed(2)} MB) exceeds 500MB limit. Consider splitting large files first.`);
+      }
+
+      // Create a new PDF document to hold merged content
+      const mergedPdf = await PDFDocument.create();
+
+      console.log(`🔗 Starting merge of ${pdfBuffers.length} PDF files`);
+
+      // Process each PDF file
+      for (let i = 0; i < pdfBuffers.length; i++) {
+        try {
+          console.log(`📄 Processing PDF ${i + 1}/${pdfBuffers.length}`);
+          
+          const bufferSizeMB = pdfBuffers[i].length / (1024 * 1024);
+          console.log(`   → File size: ${bufferSizeMB.toFixed(2)} MB`);
+          
+          // Load PDF with proper options for large files
+          const loadOptions = {
+            ignoreEncryption: true,
+            // Remove capNumbers as it may cause issues with some PDFs
+            throwOnInvalidObject: false,
+            updateMetadata: false
+          };
+          
+          const loadPromise = PDFDocument.load(pdfBuffers[i], loadOptions);
+          
+          // Set timeout for large file processing
+          const timeoutMs = Math.max(30000, bufferSizeMB * 1000); // 1 second per MB, minimum 30 seconds
+          const currentPdf = await Promise.race([
+            loadPromise,
+            new Promise((_, reject) => 
+              setTimeout(() => reject(new Error(`PDF ${i + 1} loading timeout after ${timeoutMs/1000}s`)), timeoutMs)
+            )
+          ]);
+          
+          const pageCount = currentPdf.getPageCount();
+          console.log(`   → ${pageCount} pages found`);
+
+          // Copy pages in smaller batches for large files
+          const batchSize = bufferSizeMB > 100 ? 5 : (bufferSizeMB > 20 ? 10 : 20);
+          const allCopiedPages = [];
+          
+          for (let pageStart = 0; pageStart < pageCount; pageStart += batchSize) {
+            const pageEnd = Math.min(pageStart + batchSize, pageCount);
+            const pageIndices = Array.from({length: pageEnd - pageStart}, (_, index) => pageStart + index);
+            
+            console.log(`   → Copying pages ${pageStart + 1}-${pageEnd}...`);
+            
+            try {
+              // Copy pages with error handling for each batch
+              const batchPages = await mergedPdf.copyPages(currentPdf, pageIndices);
+              allCopiedPages.push(...batchPages);
+              
+              console.log(`   ✅ Successfully copied ${batchPages.length} pages`);
+              
+            } catch (copyError) {
+              console.error(`   ❌ Error copying pages ${pageStart + 1}-${pageEnd}:`, copyError.message);
+              
+              // Try copying pages individually if batch fails
+              for (let singlePageIdx of pageIndices) {
+                try {
+                  const [singlePage] = await mergedPdf.copyPages(currentPdf, [singlePageIdx]);
+                  allCopiedPages.push(singlePage);
+                  console.log(`   ✅ Recovered page ${singlePageIdx + 1}`);
+                } catch (singleError) {
+                  console.error(`   ⚠️  Skipping corrupted page ${singlePageIdx + 1}:`, singleError.message);
+                }
+              }
+            }
+            
+            // Force garbage collection for large files
+            if (bufferSizeMB > 50 && global.gc) {
+              global.gc();
+            }
+          }
+
+          // Add copied pages to merged document
+          allCopiedPages.forEach((page) => {
+            mergedPdf.addPage(page);
+          });
+
+          console.log(`   ✅ Added ${pageCount} pages to merged document`);
+
+        } catch (error) {
+          console.error(`❌ Error processing PDF ${i + 1}:`, error.message);
+          if (error.message.includes('timeout')) {
+            throw new Error(`PDF file ${i + 1} is too large or complex to process. Consider splitting it into smaller files first.`);
+          }
+          if (error.message.includes('Invalid PDF')) {
+            throw new Error(`PDF file ${i + 1} appears to be corrupted or invalid.`);
+          }
+          throw new Error(`Failed to process PDF file ${i + 1}: ${error.message}`);
+        }
+      }
+
+      const totalPages = mergedPdf.getPageCount();
+      console.log(`🎉 Merge completed: ${totalPages} total pages in merged document`);
+
+      // Add bookmarks/outline if enabled
+      if (mergeData.addBookmarks) {
+        await this.addBookmarksToMergedPDF(mergedPdf, pdfBuffers, mergeData);
+      }
+
+      console.log(`💾 Saving merged PDF...`);
+      
+      // Save with conservative options for maximum compatibility
+      const savedPdf = await mergedPdf.save({
+        useObjectStreams: false,  // Disable object streams for better compatibility
+        addDefaultPage: false,    // Don't add default page
+        objectsPerTick: 50,       // Process fewer objects per tick for stability
+        updateFieldAppearances: false, // Avoid field appearance updates that can cause issues
+        compress: false           // Disable compression to avoid corruption
+      });
+      
+      const savedSizeMB = savedPdf.length / (1024 * 1024);
+      console.log(`📊 Final PDF size: ${savedSizeMB.toFixed(2)} MB`);
+      
+      // Enhanced PDF validation
+      try {
+        // First validation: Load with pdf-lib
+        const validationPdf = await PDFDocument.load(savedPdf, {
+          ignoreEncryption: true,
+          throwOnInvalidObject: true,  // More strict validation
+          updateMetadata: false
+        });
+        
+        const validationPageCount = validationPdf.getPageCount();
+        console.log(`✅ PDF validation passed: ${validationPageCount} pages`);
+        
+        // Additional validation: Check PDF structure
+        await this.validatePDFStructure(savedPdf);
+        
+        // Verify page count matches expected
+        if (validationPageCount !== totalPages) {
+          throw new Error(`Page count mismatch: expected ${totalPages}, got ${validationPageCount}`);
+        }
+        
+      } catch (validationError) {
+        console.error(`❌ PDF validation failed:`, validationError.message);
+        throw new Error(`Generated PDF is corrupted and cannot be opened: ${validationError.message}`);
+      }
+      
+      return savedPdf;
+    } catch (error) {
+      console.error('PDF merge error:', error);
+      throw new Error(`PDF merge failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Add bookmarks to merged PDF for easier navigation
+   * @param {PDFDocument} mergedPdf - The merged PDF document
+   * @param {Array<Buffer>} pdfBuffers - Original PDF buffers for reference
+   * @param {Object} mergeData - Merge configuration with file names
+   */
+  static async addBookmarksToMergedPDF(mergedPdf, pdfBuffers, mergeData) {
+    try {
+      let currentPageIndex = 0;
+      const fileNames = mergeData.fileNames || [];
+
+      for (let i = 0; i < pdfBuffers.length; i++) {
+        const currentPdf = await PDFDocument.load(pdfBuffers[i]);
+        const pageCount = currentPdf.getPageCount();
+        
+        const fileName = fileNames[i] || `Document ${i + 1}`;
+        const bookmarkTitle = fileName.replace(/\.pdf$/i, '');
+
+        // Note: pdf-lib has limited bookmark support in current version
+        // This is a placeholder for future bookmark implementation
+        console.log(`📑 Bookmark: "${bookmarkTitle}" at page ${currentPageIndex + 1}`);
+        
+        currentPageIndex += pageCount;
+      }
+    } catch (error) {
+      console.warn('Bookmark creation failed:', error.message);
+      // Don't throw error for bookmark failure
+    }
+  }
+
+  /**
+   * Get information about PDFs before merging
+   * @param {Array<Buffer>} pdfBuffers - Array of PDF file buffers
+   * @returns {Promise<Object>} Information about the PDFs
+   */
+  static async getPDFMergeInfo(pdfBuffers) {
+    try {
+      const pdfInfo = [];
+      let totalPages = 0;
+
+      for (let i = 0; i < pdfBuffers.length; i++) {
+        const pdf = await PDFDocument.load(pdfBuffers[i]);
+        const pageCount = pdf.getPageCount();
+        
+        pdfInfo.push({
+          index: i,
+          pageCount,
+          size: pdfBuffers[i].length
+        });
+        
+        totalPages += pageCount;
+      }
+
+      return {
+        fileCount: pdfBuffers.length,
+        totalPages,
+        files: pdfInfo,
+        estimatedSize: pdfBuffers.reduce((sum, buffer) => sum + buffer.length, 0)
+      };
+    } catch (error) {
+      throw new Error(`Failed to analyze PDFs: ${error.message}`);
+    }
+  }
+
+  /**
+   * Validate PDF structure and integrity
+   * @param {Uint8Array} pdfBytes - PDF bytes to validate
+   * @returns {Promise<void>} Throws error if validation fails
+   */
+  static async validatePDFStructure(pdfBytes) {
+    try {
+      // Check PDF header
+      const header = new TextDecoder().decode(pdfBytes.slice(0, 8));
+      if (!header.startsWith('%PDF-')) {
+        throw new Error('Invalid PDF header');
+      }
+      
+      // Check PDF trailer
+      const trailer = new TextDecoder().decode(pdfBytes.slice(-1024));
+      if (!trailer.includes('%%EOF')) {
+        throw new Error('Invalid PDF trailer - missing %%EOF');
+      }
+      
+      // Check for minimum PDF structure
+      const pdfString = new TextDecoder().decode(pdfBytes);
+      if (!pdfString.includes('/Type /Catalog')) {
+        throw new Error('Missing PDF catalog');
+      }
+      
+      if (!pdfString.includes('/Type /Pages')) {
+        throw new Error('Missing PDF pages structure');
+      }
+      
+      console.log(`✅ PDF structure validation passed`);
+      
+    } catch (error) {
+      console.error(`❌ PDF structure validation failed:`, error.message);
+      throw new Error(`PDF structure is invalid: ${error.message}`);
+    }
+  }
 }
 
 module.exports = PDFService;

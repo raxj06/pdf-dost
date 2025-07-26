@@ -23,8 +23,12 @@ app.use(cors({
   credentials: true
 }));
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '300mb' }));
+app.use(express.urlencoded({ extended: true, limit: '300mb' }));
+app.use(express.raw({ limit: '300mb', type: 'application/pdf' })); // Better PDF handling
+
+// Disable etag for PDF responses to prevent caching issues
+app.set('etag', false);
 
 // Request logging middleware
 app.use((req, res, next) => {

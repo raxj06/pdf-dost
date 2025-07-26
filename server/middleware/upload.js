@@ -22,7 +22,9 @@ const upload = multer({
   storage: storage,
   fileFilter: fileFilter,
   limits: {
-    fileSize: 50 * 1024 * 1024 // 50MB limit
+    fileSize: 250 * 1024 * 1024, // 250MB limit for large PDFs
+    files: 10, // Maximum 10 files for merge operations
+    fieldSize: 1024 * 1024 // 1MB for other fields
   }
 });
 
@@ -34,7 +36,19 @@ const handleUploadError = (error, req, res, next) => {
     if (error.code === 'LIMIT_FILE_SIZE') {
       return res.status(400).json({ 
         error: 'File too large', 
-        details: 'Maximum file size is 50MB' 
+        details: 'Maximum file size is 250MB per file. For very large files, consider splitting them first.' 
+      });
+    }
+    if (error.code === 'LIMIT_FILE_COUNT') {
+      return res.status(400).json({ 
+        error: 'Too many files', 
+        details: 'Maximum 10 files allowed for merge operations' 
+      });
+    }
+    if (error.code === 'LIMIT_UNEXPECTED_FILE') {
+      return res.status(400).json({ 
+        error: 'Unexpected file field', 
+        details: 'Invalid file upload field' 
       });
     }
     return res.status(400).json({ 

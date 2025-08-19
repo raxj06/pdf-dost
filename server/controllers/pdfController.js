@@ -482,6 +482,155 @@ class PDFController {
   }
 
   /**
+   * Compress PDF to reduce file size
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  static async compressPDF(req, res) {
+    try {
+      // Validate file upload
+      if (!req.file) {
+        return res.status(400).json({ 
+          error: 'No PDF file uploaded',
+          details: 'Please select a PDF file to compress'
+        });
+      }
+
+      console.log(`📁 Compression request received for: ${req.file.originalname}`);
+
+      // Validate and parse compression data
+      let compressionData = {};
+      try {
+        if (req.body.compressionData) {
+          compressionData = JSON.parse(req.body.compressionData);
+        }
+        console.log('Compression data received:', compressionData);
+      } catch (parseError) {
+        console.warn('Invalid compression data, using defaults:', parseError.message);
+        compressionData = {};
+      }
+
+      // Check file size limits
+      const fileSizeMB = req.file.buffer.length / (1024 * 1024);
+      console.log(`📊 Input file size: ${fileSizeMB.toFixed(2)} MB`);
+
+      if (fileSizeMB > 250) {
+        return res.status(400).json({
+          error: 'File too large',
+          details: 'Maximum file size for compression is 250MB. Please use a smaller file.'
+        });
+      }
+
+      // Process the PDF compression
+      const compressedPdfBuffer = await PDFService.compressPDF(
+        req.file.buffer, 
+        compressionData
+      );
+      
+      // Additional validation: Ensure buffer is valid
+      if (!Buffer.isBuffer(compressedPdfBuffer) && !(compressedPdfBuffer instanceof Uint8Array)) {
+        throw new Error('Invalid PDF buffer type returned from compression service');
+      }
+      
+      // Convert to Buffer if it's Uint8Array
+      const finalBuffer = Buffer.isBuffer(compressedPdfBuffer) ? 
+        compressedPdfBuffer : 
+        Buffer.from(compressedPdfBuffer);
+      
+      // Verify buffer integrity
+      if (finalBuffer.length === 0) {
+        throw new Error('Compressed PDF buffer is empty');
+      }
+      
+      // Check PDF header
+      const headerCheck = finalBuffer.toString('ascii', 0, 8);
+      if (!headerCheck.startsWith('%PDF-')) {
+        throw new Error('Compressed PDF buffer does not contain valid PDF header');
+      }
+      
+      console.log(`✅ Compression validation passed: ${finalBuffer.length} bytes`);
+      
+      // Generate filename
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const originalName = req.file.originalname.replace(/\.pdf$/i, '');
+      const outputFileName = compressionData.outputFileName || 
+        `${originalName}-compressed-${timestamp}.pdf`;
+      
+      const originalSizeMB = req.file.buffer.length / (1024 * 1024);
+      const compressedSizeMB = finalBuffer.length / (1024 * 1024);
+      const reductionPercent = ((originalSizeMB - compressedSizeMB) / originalSizeMB * 100).toFixed(1);
+      
+      console.log(`✅ Compression completed: ${originalSizeMB.toFixed(2)}MB → ${compressedSizeMB.toFixed(2)}MB (${reductionPercent}% reduction)`);
+
+      // Send the compressed PDF with proper headers
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${outputFileName}"`);
+      res.setHeader('Content-Length', finalBuffer.length);
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      res.setHeader('Content-Encoding', 'identity');
+      res.setHeader('Accept-Ranges', 'bytes');
+      
+      // Add compression stats to response headers for frontend
+      res.setHeader('X-Original-Size', req.file.buffer.length);
+      res.setHeader('X-Compressed-Size', finalBuffer.length);
+      res.setHeader('X-Compression-Ratio', reductionPercent);
+      
+      console.log(`📤 Sending compressed PDF: ${finalBuffer.length} bytes`);
+      
+      res.send(finalBuffer);
+
+    } catch (error) {
+      console.error('PDF compression error:', error);
+      res.status(500).json({ 
+        error: 'PDF compression failed', 
+        details: error.message 
+      });
+    }
+  }
+
+  /**
+   * Get compression preview information
+   * @param {Object} req - Express request object
+   * @param {Object} res - Express response object
+   */
+  static async getCompressionPreview(req, res) {
+    try {
+      // Validate file upload
+      if (!req.file) {
+        return res.status(400).json({ 
+          error: 'No PDF file uploaded',
+          details: 'Please select a PDF file for compression preview'
+        });
+      }
+
+      console.log(`📋 Compression preview request for: ${req.file.originalname}`);
+
+      // Get compression info
+      const compressionInfo = await PDFService.getCompressionInfo(req.file.buffer);
+      
+      // Add file name to response
+      const previewData = {
+        ...compressionInfo,
+        fileName: req.file.originalname,
+        originalSizeMB: (compressionInfo.originalSize / (1024 * 1024)).toFixed(2)
+      };
+
+      console.log('Compression preview data:', previewData);
+
+      res.json(previewData);
+
+    } catch (error) {
+      console.error('Error generating compression preview:', error);
+      res.status(500).json({ 
+        error: 'Failed to generate compression preview', 
+        details: error.message 
+      });
+    }
+  }
+
+  /**
    * Health check for PDF service
    * @param {Object} req - Express request object
    * @param {Object} res - Express response object

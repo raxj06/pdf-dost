@@ -772,3 +772,260 @@
     text-align: left;
   }
 }
+
+/* Compression-specific styles */
+.compression-options {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.compression-estimates {
+  margin-top: 1rem;
+}
+
+.compression-estimates h3 {
+  color: #4facfe;
+  margin-bottom: 1rem;
+  font-size: 1.1rem;
+}
+
+.estimate-item {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 0.8rem;
+  transition: all 0.3s ease;
+}
+
+/* Wrapper for number inputs with suffix */
+.number-wrapper {
+  position: relative;
+  display: inline-block;
+  width: 200px;
+}
+
+.number-wrapper .number-input {
+  width: 100%;
+  padding-right: 40px;
+}
+
+.input-suffix {
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #888;
+  font-size: 0.9rem;
+  pointer-events: none;
+}
+
+/* Enhanced checkbox styling */
+.checkbox-input {
+  margin-right: 8px;
+  transform: scale(1.2);
+}
+
+.checkbox-input:checked {
+  accent-color: #4facfe;
+}
+
+/* Select wrapper for consistent styling */
+.select-wrapper {
+  position: relative;
+  margin-bottom: 0.5rem;
+}
+
+.estimate-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(74, 172, 254, 0.3);
+}
+
+.estimate-item.selected {
+  background: rgba(74, 172, 254, 0.15);
+  border-color: #4facfe;
+  box-shadow: 0 0 20px rgba(74, 172, 254, 0.2);
+}
+
+.estimate-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+.estimate-level {
+  font-weight: bold;
+  color: #4facfe;
+  font-size: 0.9rem;
+}
+
+.estimate-reduction {
+  background: rgba(74, 172, 254, 0.2);
+  color: #4facfe;
+  padding: 0.2rem 0.6rem;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: bold;
+}
+
+.estimate-size {
+  font-size: 1rem;
+  color: white;
+  margin-bottom: 0.3rem;
+}
+
+.estimate-description {
+  font-size: 0.85rem;
+  color: #a0a0a0;
+  line-height: 1.4;
+}
+
+/* Result styles */
+.result-info {
+  background: rgba(76, 175, 80, 0.1);
+  border: 1px solid rgba(76, 175, 80, 0.3);
+  border-radius: 8px;
+  padding: 1.5rem;
+}
+
+.result-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.result-item.success {
+  background: rgba(76, 175, 80, 0.1);
+  border: 1px solid rgba(76, 175, 80, 0.3);
+  border-radius: 6px;
+  padding: 0.8rem;
+  text-align: center;
+}
+
+.success-message {
+  text-align: center;
+  color: #4CAF50;
+  font-weight: bold;
+  font-size: 1.1rem;
+  margin-top: 1rem;
+}
+
+/* Tips section */
+.tips {
+  background: rgba(255, 193, 7, 0.1);
+  border: 1px solid rgba(255, 193, 7, 0.3);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-top: 1.5rem;
+}
+
+.tips h3 {
+  color: #FFC107;
+  margin-bottom: 0.8rem;
+  font-size: 1rem;
+}
+
+.tips ul {
+  list-style: none;
+  padding: 0;
+}
+
+.tips li {
+  padding: 0.3rem 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  color: #e0e0e0;
+}
+
+.tips li:last-child {
+  border-bottom: none;
+}
+
+.tips li strong {
+  color: #FFC107;
+}
+
+/* Custom dropdown styling for dark theme */
+.select-input {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  padding: 0.8rem 1rem;
+  color: white;
+  font-size: 0.9rem;
+  width: 100%;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  appearance: none;
+  background-image: url("data:image/svg+xml;charset=UTF-8,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3e%3cpolyline points='6,9 12,15 18,9'%3e%3c/polyline%3e%3c/svg%3e");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+  background-size: 1rem;
+  padding-right: 3rem;
+}
+
+.select-input:focus {
+  outline: none;
+  border-color: #4facfe;
+  background: rgba(74, 172, 254, 0.1);
+  box-shadow: 0 0 0 2px rgba(74, 172, 254, 0.2);
+}
+
+.select-input:hover {
+  border-color: rgba(74, 172, 254, 0.5);
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* Custom option styling */
+.select-input option {
+  background: #1a1a2e;
+  color: white;
+  padding: 0.5rem;
+  border: none;
+}
+
+.select-input option:hover,
+.select-input option:focus,
+.select-input option:checked {
+  background: #4facfe;
+  color: white;
+}
+
+/* Number input styling */
+input[type="number"].text-input {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 6px;
+  padding: 0.8rem 1rem;
+  color: white;
+  font-size: 0.9rem;
+  width: 100%;
+  transition: all 0.3s ease;
+}
+
+input[type="number"].text-input:focus {
+  outline: none;
+  border-color: #4facfe;
+  background: rgba(74, 172, 254, 0.1);
+  box-shadow: 0 0 0 2px rgba(74, 172, 254, 0.2);
+}
+
+input[type="number"].text-input:hover {
+  border-color: rgba(74, 172, 254, 0.5);
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* Webkit browsers (Chrome, Safari, Edge) number input arrows */
+input[type="number"].text-input::-webkit-outer-spin-button,
+input[type="number"].text-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+/* Firefox number input arrows */
+input[type="number"].text-input[type="number"] {
+  appearance: textfield;
+  -moz-appearance: textfield;
+}

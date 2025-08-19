@@ -1,4 +1,6 @@
 const { PDFDocument, rgb, StandardFonts, degrees } = require('pdf-lib');
+const zlib = require('zlib');
+const pako = require('pako');
 
 /**
  * PDF Processing Service
@@ -345,6 +347,7 @@ class PDFService {
       for (let i = startPage - 1; i < pages.length; i++) {
         const page = pages[i];
         const { width } = page.getSize();
+        // Page numbering: i+1 gives us the actual page number we want to display
         const currentPageNum = i + 1;
         
         // Add white background if requested
@@ -660,6 +663,359 @@ class PDFService {
       };
     } catch (error) {
       throw new Error(`Failed to analyze PDFs: ${error.message}`);
+    }
+  }
+
+  /**
+   * Compress PDF to reduce file size
+   * @param {Buffer} pdfBuffer - PDF file buffer
+   * @param {Object} compressionData - Compression configuration
+   * @returns {Promise<Uint8Array>} Compressed PDF bytes
+   */
+  static async compressPDF(pdfBuffer, compressionData = {}) {
+    try {
+      // Extract compression configuration
+      const {
+        compressionLevel = 'medium', // 'low', 'medium', 'high', 'maximum'
+        removeMetadata = true,
+        optimizeImages = true,
+        targetSizeKB = null,
+        maintainQuality = true
+      } = compressionData;
+
+      console.log(`🗜️  Starting PDF compression with level: ${compressionLevel}`);
+      
+      const originalSizeMB = pdfBuffer.length / (1024 * 1024);
+      console.log(`📊 Original file size: ${originalSizeMB.toFixed(2)} MB`);
+
+      // Load PDF document with compression-friendly options
+      const pdfDoc = await PDFDocument.load(pdfBuffer, {
+        ignoreEncryption: true,
+        throwOnInvalidObject: false,
+        updateMetadata: false
+      });
+
+      const pageCount = pdfDoc.getPageCount();
+      console.log(`📄 Processing ${pageCount} pages for compression`);
+
+      // Configure compression settings based on level
+      const compressionSettings = this.getCompressionSettings(compressionLevel);
+      
+      // Remove metadata if requested
+      if (removeMetadata) {
+        try {
+          // Remove document metadata
+          pdfDoc.setTitle('');
+          pdfDoc.setAuthor('');
+          pdfDoc.setSubject('');
+          pdfDoc.setCreator('');
+          pdfDoc.setProducer('PDF Dost Compressor');
+          pdfDoc.setKeywords([]);
+          
+          // Remove creation and modification dates safely
+          try {
+            pdfDoc.setCreationDate(undefined);
+            pdfDoc.setModificationDate(undefined);
+          } catch (dateError) {
+            console.warn(`⚠️  Could not remove dates: ${dateError.message}`);
+          }
+          
+          console.log(`🗑️  Metadata removed`);
+        } catch (metadataError) {
+          console.warn(`⚠️  Could not remove all metadata: ${metadataError.message}`);
+        }
+      }
+
+      // Create a new PDF document for maximum compression to ensure clean structure
+      let finalDoc = pdfDoc;
+      
+      if (compressionLevel === 'maximum') {
+        try {
+          console.log(`🔄 Creating fresh PDF document for maximum compression`);
+          
+          // Create new document and copy pages
+          finalDoc = await PDFDocument.create();
+          
+          // Copy pages one by one to ensure clean structure
+          const pages = pdfDoc.getPages();
+          const pageRefs = pages.map((_, index) => index);
+          
+          const copiedPages = await finalDoc.copyPages(pdfDoc, pageRefs);
+          copiedPages.forEach(page => {
+            finalDoc.addPage(page);
+          });
+          
+          console.log(`✅ Fresh PDF document created with ${copiedPages.length} pages`);
+        } catch (copyError) {
+          console.warn(`⚠️  Fresh document creation failed, using original: ${copyError.message}`);
+          finalDoc = pdfDoc;
+        }
+      }
+
+      // Try multiple compression passes with different settings
+      console.log(`💾 Starting compression with ${compressionLevel} level...`);
+      
+      let bestCompressed = null;
+      let bestSize = Infinity;
+      let bestSettings = null;
+
+      // Primary compression attempt
+      const primarySettings = {
+        useObjectStreams: compressionSettings.useObjectStreams,
+        addDefaultPage: false,
+        objectsPerTick: compressionSettings.objectsPerTick,
+        updateFieldAppearances: false,
+        compress: compressionSettings.compress
+      };
+
+      try {
+        console.log(`� Primary compression attempt:`, primarySettings);
+        const primaryResult = await finalDoc.save(primarySettings);
+        
+        if (primaryResult.length < bestSize) {
+          bestCompressed = primaryResult;
+          bestSize = primaryResult.length;
+          bestSettings = primarySettings;
+          console.log(`✅ Primary compression successful: ${(bestSize / (1024 * 1024)).toFixed(2)} MB`);
+        }
+      } catch (primaryError) {
+        console.warn(`⚠️  Primary compression failed: ${primaryError.message}`);
+      }
+
+      // If we need better compression, try alternative settings
+      if (compressionLevel === 'high' || compressionLevel === 'maximum') {
+        const alternativeSettings = [
+          {
+            useObjectStreams: false,
+            addDefaultPage: false,
+            objectsPerTick: 5,
+            updateFieldAppearances: false,
+            compress: true
+          },
+          {
+            useObjectStreams: true,
+            addDefaultPage: false,
+            objectsPerTick: 1,
+            updateFieldAppearances: false,
+            compress: true
+          },
+          {
+            useObjectStreams: false,
+            addDefaultPage: false,
+            objectsPerTick: 1,
+            updateFieldAppearances: false,
+            compress: true
+          }
+        ];
+
+        for (let i = 0; i < alternativeSettings.length; i++) {
+          try {
+            console.log(`🔧 Alternative compression ${i + 1}:`, alternativeSettings[i]);
+            const altResult = await finalDoc.save(alternativeSettings[i]);
+            
+            if (altResult.length < bestSize) {
+              bestCompressed = altResult;
+              bestSize = altResult.length;
+              bestSettings = alternativeSettings[i];
+              console.log(`✅ Better compression found: ${(bestSize / (1024 * 1024)).toFixed(2)} MB`);
+            }
+          } catch (altError) {
+            console.warn(`⚠️  Alternative compression ${i + 1} failed: ${altError.message}`);
+          }
+        }
+      }
+
+      // If no compression worked, use basic settings
+      if (!bestCompressed) {
+        console.log(`� Fallback to basic compression...`);
+        const basicSettings = {
+          useObjectStreams: false,
+          addDefaultPage: false,
+          objectsPerTick: 50,
+          updateFieldAppearances: false,
+          compress: true
+        };
+        
+        bestCompressed = await finalDoc.save(basicSettings);
+        bestSize = bestCompressed.length;
+        bestSettings = basicSettings;
+      }
+
+      const compressedSizeMB = bestSize / (1024 * 1024);
+      const compressionRatio = ((originalSizeMB - compressedSizeMB) / originalSizeMB * 100).toFixed(1);
+      
+      console.log(`📊 Final compressed size: ${compressedSizeMB.toFixed(2)} MB`);
+      console.log(`📉 Compression ratio: ${compressionRatio}% reduction`);
+      console.log(`🔧 Best settings used:`, bestSettings);
+
+      // Check if target size is achieved
+      if (targetSizeKB && bestSize > targetSizeKB * 1024) {
+        console.log(`⚠️  Target size ${targetSizeKB}KB not achieved. Current size: ${(bestSize / 1024).toFixed(1)}KB`);
+      }
+
+      // Final validation
+      try {
+        await PDFDocument.load(bestCompressed);
+        console.log(`✅ Compressed PDF validation successful`);
+      } catch (validationError) {
+        console.error(`❌ Compressed PDF validation failed:`, validationError.message);
+        throw new Error(`Compression resulted in corrupted PDF: ${validationError.message}`);
+      }
+
+      console.log(`🎉 Final result: ${originalSizeMB.toFixed(2)}MB → ${compressedSizeMB.toFixed(2)}MB (${compressionRatio}% reduction)`);
+      return bestCompressed;
+    } catch (error) {
+      console.error('PDF compression error:', error);
+      throw new Error(`PDF compression failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Get compression settings based on compression level
+   * @param {string} level - Compression level (low, medium, high, maximum)
+   * @returns {Object} Compression settings
+   */
+  static getCompressionSettings(level) {
+    const settings = {
+      low: {
+        useObjectStreams: false,
+        objectsPerTick: 100,
+        compress: true,
+        description: 'Minimal compression, preserves maximum quality'
+      },
+      medium: {
+        useObjectStreams: true,
+        objectsPerTick: 25,
+        compress: true,
+        description: 'Balanced compression with good quality'
+      },
+      high: {
+        useObjectStreams: true,
+        objectsPerTick: 10,
+        compress: true,
+        description: 'Strong compression, slight quality reduction'
+      },
+      maximum: {
+        useObjectStreams: false,  // Sometimes false works better for max compression
+        objectsPerTick: 1,        // Most aggressive setting
+        compress: true,
+        description: 'Maximum compression, quality may be affected'
+      }
+    };
+
+    return settings[level] || settings.medium;
+  }
+
+  /**
+   * Get compression preview information
+   * @param {Buffer} pdfBuffer - PDF file buffer
+   * @returns {Promise<Object>} Information about the PDF for compression preview
+   */
+  static async getCompressionInfo(pdfBuffer) {
+    try {
+      const pdf = await PDFDocument.load(pdfBuffer);
+      const pageCount = pdf.getPageCount();
+      const originalSize = pdfBuffer.length;
+      
+      // More realistic compression estimates based on actual PDF characteristics
+      const baselineCompression = this.estimateCompressionPotential(pdfBuffer);
+      
+      const estimatedSavings = {
+        low: Math.round(originalSize * (baselineCompression.low / 100)),
+        medium: Math.round(originalSize * (baselineCompression.medium / 100)),
+        high: Math.round(originalSize * (baselineCompression.high / 100)),
+        maximum: Math.round(originalSize * (baselineCompression.maximum / 100))
+      };
+
+      return {
+        originalSize,
+        originalSizeMB: (originalSize / (1024 * 1024)).toFixed(2),
+        pageCount,
+        estimatedSavings,
+        compressionLevels: [
+          {
+            level: 'low',
+            description: 'Minimal compression, preserves maximum quality',
+            estimatedSize: originalSize - estimatedSavings.low,
+            estimatedReduction: `${baselineCompression.low}-${baselineCompression.low + 5}%`
+          },
+          {
+            level: 'medium',
+            description: 'Balanced compression with good quality',
+            estimatedSize: originalSize - estimatedSavings.medium,
+            estimatedReduction: `${baselineCompression.medium}-${baselineCompression.medium + 10}%`
+          },
+          {
+            level: 'high',
+            description: 'Strong compression, slight quality reduction',
+            estimatedSize: originalSize - estimatedSavings.high,
+            estimatedReduction: `${baselineCompression.high}-${baselineCompression.high + 20}%`
+          },
+          {
+            level: 'maximum',
+            description: 'Maximum compression, quality may be affected',
+            estimatedSize: originalSize - estimatedSavings.maximum,
+            estimatedReduction: `${baselineCompression.maximum}-${baselineCompression.maximum + 30}%`
+          }
+        ]
+      };
+    } catch (error) {
+      throw new Error(`Failed to analyze PDF for compression: ${error.message}`);
+    }
+  }
+
+  /**
+   * Estimate compression potential based on PDF characteristics
+   * @param {Buffer} pdfBuffer - PDF file buffer
+   * @returns {Object} Estimated compression percentages for each level
+   */
+  static estimateCompressionPotential(pdfBuffer) {
+    try {
+      const pdfString = pdfBuffer.toString('binary');
+      
+      // Analyze PDF content to estimate compression potential
+      let baseCompression = 10; // Default baseline
+      
+      // Check for text content (highly compressible)
+      const textObjects = (pdfString.match(/\/Type\s*\/Font/g) || []).length;
+      if (textObjects > 0) {
+        baseCompression += Math.min(textObjects * 2, 20);
+      }
+      
+      // Check for repeated patterns (good for compression)
+      const streamCount = (pdfString.match(/stream\s/g) || []).length;
+      if (streamCount > 10) {
+        baseCompression += Math.min(streamCount, 15);
+      }
+      
+      // Check for whitespace and formatting (compressible)
+      const whitespaceRatio = (pdfString.match(/\s/g) || []).length / pdfBuffer.length;
+      if (whitespaceRatio > 0.1) {
+        baseCompression += Math.min(whitespaceRatio * 100, 10);
+      }
+      
+      // Check for metadata and annotations (removable)
+      if (pdfString.includes('/Info') || pdfString.includes('/Metadata')) {
+        baseCompression += 5;
+      }
+      
+      // Ensure realistic ranges
+      baseCompression = Math.max(5, Math.min(baseCompression, 40));
+      
+      return {
+        low: Math.round(baseCompression * 0.3),      // Conservative
+        medium: Math.round(baseCompression * 0.6),   // Moderate  
+        high: Math.round(baseCompression * 1.0),     // Aggressive
+        maximum: Math.round(baseCompression * 1.5)   // Very aggressive
+      };
+    } catch (error) {
+      console.warn('Could not analyze PDF characteristics, using defaults');
+      return {
+        low: 5,
+        medium: 15,
+        high: 30,
+        maximum: 50
+      };
     }
   }
 

@@ -46,6 +46,30 @@ router.post('/merge/preview',
 );
 
 /**
+ * @route   POST /api/pdf/compress
+ * @desc    Compress PDF to reduce file size
+ * @access  Public
+ * @body    multipart/form-data with PDF file and compressionData JSON
+ */
+router.post('/compress', 
+  upload.single('pdf'), 
+  handleUploadError,
+  PDFController.compressPDF
+);
+
+/**
+ * @route   POST /api/pdf/compress/preview
+ * @desc    Get compression preview information
+ * @access  Public
+ * @body    multipart/form-data with PDF file
+ */
+router.post('/compress/preview', 
+  upload.single('pdf'),
+  handleUploadError,
+  PDFController.getCompressionPreview
+);
+
+/**
  * @route   POST /api/pdf/watermark
  * @desc    Add watermark to PDF
  * @access  Public

@@ -343,12 +343,12 @@ class PDFService {
       const footerY = 50;  // Near bottom of page
       const leftMargin = 50;
 
-      // Process each page starting from startPage
-      for (let i = startPage - 1; i < pages.length; i++) {
+      // Process each page starting from the first page (i=0)
+      for (let i = 0; i < pages.length; i++) {
         const page = pages[i];
         const { width } = page.getSize();
-        // Page numbering: i+1 gives us the actual page number we want to display
-        const currentPageNum = i + 1;
+        // Page numbering: startPage + i gives us the page number to display (e.g., if startPage=20, first page shows 20, second shows 21, etc.)
+        const currentPageNum = startPage + i;
         
         // Add white background if requested
         if (coverWithWhite) {
